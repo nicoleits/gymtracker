@@ -8,6 +8,58 @@
 <meta name="apple-mobile-web-app-title" content="FAB Gym">
 <meta name="theme-color" content="#0D0D0F">
 <title>FAB GymTracker</title>
+<script>
+// Genera el ícono SVG como PNG en canvas y lo inyecta en el manifest dinámicamente
+(function(){
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  // Fondo negro
+  ctx.fillStyle = '#0D0D0F';
+  ctx.beginPath();
+  ctx.roundRect(0,0,512,512,96);
+  ctx.fill();
+  // Borde lima
+  ctx.strokeStyle = '#C8FF00';
+  ctx.lineWidth = 18;
+  ctx.beginPath();
+  ctx.roundRect(9,9,494,494,90);
+  ctx.stroke();
+  // Texto "FAB"
+  ctx.fillStyle = '#C8FF00';
+  ctx.font = 'bold 200px Arial Black, Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('FAB', 256, 210);
+  // Subtexto "GYM"
+  ctx.fillStyle = '#5A5A6A';
+  ctx.font = 'bold 100px Arial Black, Arial';
+  ctx.fillText('GYM', 256, 360);
+
+  const iconData = canvas.toDataURL('image/png');
+  const manifest = {
+    name: 'FAB GymTracker',
+    short_name: 'FAB Gym',
+    start_url: window.location.href,
+    display: 'standalone',
+    background_color: '#0D0D0F',
+    theme_color: '#0D0D0F',
+    icons: [
+      { src: iconData, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('link');
+  link.rel = 'manifest'; link.href = url;
+  document.head.appendChild(link);
+  // Apple touch icon
+  const appleLink = document.createElement('link');
+  appleLink.rel = 'apple-touch-icon';
+  appleLink.href = iconData;
+  document.head.appendChild(appleLink);
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
