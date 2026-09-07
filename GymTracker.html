@@ -59,6 +59,7 @@
   .session-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; flex-shrink: 0; }
   .session-icon.purple { background: var(--purple); }
   .session-icon.teal { background: var(--teal); }
+  .session-icon.amber { background: var(--amber); }
   .session-info h2 { font-size: 17px; font-weight: 600; }
   .session-info p { font-size: 12px; color: var(--text-2); }
 
@@ -70,6 +71,17 @@
   .ex-target { font-size: 12px; color: var(--text-3); }
   .ex-done { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s; }
   .ex-done.done { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .ex-caution { font-size: 11px; color: var(--amber); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+
+  /* Session picker (día flexible) */
+  .session-picker { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
+  .session-pill { flex-shrink: 0; padding: 9px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-2); transition: all .15s; white-space: nowrap; }
+  .session-pill.active.purple { background: var(--purple); border-color: var(--purple); color: #fff; }
+  .session-pill.active.teal { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .session-pill.active.amber { background: var(--amber); border-color: var(--amber); color: #fff; }
+  .session-pill.active.rest { background: var(--gray-dark); border-color: var(--gray-dark); color: #fff; }
+  .session-pill .star { color: var(--amber); }
+  .session-pill.active .star { color: #fff; }
 
   /* AI Input */
   .ai-box { background: var(--purple-light); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
@@ -149,6 +161,21 @@
 
   /* Notification banner */
   .notif-banner { background: var(--amber-light); border: 0.5px solid var(--amber); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--amber); display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+
+  /* Swap sheet */
+  #swap-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 250; align-items: flex-end; justify-content: center; }
+  #swap-overlay.visible { display: flex; }
+  .swap-sheet { background: var(--surface); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; }
+  .swap-sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
+  .swap-sheet-title { font-size: 13px; color: var(--text-3); margin-bottom: 2px; }
+  .swap-sheet-name { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+  .swap-option { border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px; cursor: pointer; transition: all .15s; }
+  .swap-option:active { background: var(--gray-light); }
+  .swap-option-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .swap-option-note { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+  .swap-lumbar-tag { font-size: 10px; background: var(--teal-light); color: var(--teal-dark); padding: 1px 7px; border-radius: 10px; font-weight: 600; }
+  .swap-restore { text-align: center; font-size: 13px; color: var(--purple); font-weight: 500; padding: 12px 0 2px; cursor: pointer; }
+  .swap-cancel { text-align: center; font-size: 13px; color: var(--text-3); padding: 6px 0; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -163,6 +190,8 @@
       </div>
 
       <div id="notif-area"></div>
+
+      <div class="session-picker" id="session-picker"></div>
 
       <div id="ai-section" class="ai-box">
         <div class="ai-box-title"><i class="ti ti-sparkles"></i> Registrar con IA</div>
@@ -189,7 +218,7 @@
         <div class="stat-card">
           <div class="stat-label">Sesiones completadas</div>
           <div class="stat-val" id="stat-sessions">0</div>
-          <div class="stat-sub">de 4 esta semana</div>
+          <div class="stat-sub">de 3 esta semana</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Semana del ciclo</div>
@@ -266,12 +295,15 @@
 
       <p class="section-title">Recordatorio de entrenamiento</p>
       <div class="card">
-        <div style="font-size:14px; font-weight:500; margin-bottom:10px;">Días de entrenamiento</div>
+        <div style="font-size:14px; font-weight:500; margin-bottom:6px;">Días de entrenamiento</div>
+        <div style="font-size:12px; color:var(--text-2); margin-bottom:10px;">Tu plan es de 3 días/semana a elección. Marca los días que sueles usar para el recordatorio.</div>
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;" id="reminder-days">
           <button class="btn btn-secondary" onclick="toggleRemDay(this,'Lunes')" data-day="Lunes">Lunes</button>
           <button class="btn btn-secondary" onclick="toggleRemDay(this,'Martes')" data-day="Martes">Martes</button>
+          <button class="btn btn-secondary" onclick="toggleRemDay(this,'Miércoles')" data-day="Miércoles">Miércoles</button>
           <button class="btn btn-secondary" onclick="toggleRemDay(this,'Jueves')" data-day="Jueves">Jueves</button>
           <button class="btn btn-secondary" onclick="toggleRemDay(this,'Viernes')" data-day="Viernes">Viernes</button>
+          <button class="btn btn-secondary" onclick="toggleRemDay(this,'Sábado')" data-day="Sábado">Sábado</button>
         </div>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
           <label style="font-size:13px; color:var(--text-2);">Hora:</label>
@@ -293,7 +325,7 @@
         <button class="btn btn-block" style="background:var(--coral-light); color:var(--coral);" onclick="resetData()"><i class="ti ti-trash"></i> Borrar todos los datos</button>
       </div>
 
-      <div style="text-align:center; padding:16px 0; color:var(--text-3); font-size:12px;">GymTracker v1.0 · Plan de 12 semanas personalizado<br>⚠ No sustituye consejo médico profesional</div>
+      <div style="text-align:center; padding:16px 0; color:var(--text-3); font-size:12px;">GymTracker v1.1 · Plan Inferior / Superior / Full Body · 12 semanas<br>⚠ No sustituye consejo médico profesional</div>
     </div>
 
   </div><!-- /content -->
@@ -319,121 +351,201 @@
   </div>
 </div>
 
+<!-- SWAP OVERLAY -->
+<div id="swap-overlay" onclick="if(event.target===this) closeSwap()">
+  <div class="swap-sheet" id="swap-sheet-content"></div>
+</div>
+
 <script>
+// Split: Inferior / Superior / Fuerza Full Body — plan Karen Cea (Care Assistance)
+// 3 sesiones por bloque, sin días fijos: la usuaria elige la sesión cada día.
+const SESSION_TYPES = [
+  {key:"inferior", label:"Inferior",  color:"teal",   icon:"run"},
+  {key:"superior", label:"Superior",  color:"purple", icon:"barbell"},
+  {key:"fullbody", label:"Fuerza Full Body", color:"amber", icon:"bolt"},
+];
+
+// Alternativas por ejercicio (2 por familia). lumbarSafe:true = opción especialmente
+// recomendada por menor exigencia/compresión en la zona lumbar.
+const ALT_MAP = {
+  estocadas: [
+    {name:"Zancada búlgara con mancuernas", lumbarSafe:true, note:"Torso más erguido, menor carga en la espalda baja"},
+    {name:"Sentadilla goblet", lumbarSafe:false, note:"Bilateral, más fácil de estabilizar"},
+  ],
+  prensa90: [
+    {name:"Sentadilla hack (máquina)", lumbarSafe:false, note:"Espalda apoyada, enfoque cuádriceps"},
+    {name:"Prensa horizontal", lumbarSafe:true, note:"Menor flexión de cadera/lumbar en el fondo"},
+  ],
+  legcurl: [
+    {name:"Leg curl de pie (unilateral)", lumbarSafe:false, note:"Mismo patrón, en máquina de pie"},
+    {name:"Curl femoral tumbado con banda", lumbarSafe:true, note:"Sin carga axial en la columna"},
+  ],
+  legext: [
+    {name:"Prensa de piernas (pies bajos y juntos)", lumbarSafe:false, note:"Sesgo a cuádriceps en máquina"},
+    {name:"Sentadilla goblet a tempo", lumbarSafe:true, note:"Controlada, torso erguido"},
+  ],
+  aductor: [
+    {name:"Aducción de cadera en polea baja", lumbarSafe:false, note:"De pie, mismo músculo"},
+    {name:"Aducción tumbada con banda", lumbarSafe:true, note:"Sin apoyo de tronco necesario"},
+  ],
+  abductor: [
+    {name:"Abducción de cadera en polea baja", lumbarSafe:false, note:"De pie, mismo músculo"},
+    {name:"Almeja con banda (side-lying)", lumbarSafe:true, note:"Muy suave para la zona lumbar"},
+  ],
+  saltosquat: [
+    {name:"Sentadilla goblet con mancuerna", lumbarSafe:true, note:"Sin impacto de aterrizaje"},
+    {name:"Step-up con mancuernas", lumbarSafe:true, note:"Unilateral, controlado, sin salto"},
+  ],
+  banco: [
+    {name:"Press en máquina de pecho", lumbarSafe:true, note:"Espalda apoyada en el respaldo"},
+    {name:"Press con mancuernas en banco plano", lumbarSafe:false, note:"Misma mecánica, más estabilización"},
+  ],
+  pulldown: [
+    {name:"Remo en máquina sentado", lumbarSafe:false, note:"Complementa dorsal/espalda"},
+    {name:"Jalón agarre neutro", lumbarSafe:true, note:"Sentado y apoyado, agarre más cómodo"},
+  ],
+  presshombro: [
+    {name:"Press de hombro sentado con respaldo", lumbarSafe:true, note:"Sin exigencia de estabilización lumbar"},
+    {name:"Press Arnold sentado", lumbarSafe:true, note:"Variante sentada, protege la espalda baja"},
+  ],
+  triceps: [
+    {name:"Extensión de tríceps un brazo (mancuerna)", lumbarSafe:false, note:"Variante libre"},
+    {name:"Extensión de tríceps en polea, sentado", lumbarSafe:true, note:"Quita exigencia postural de pie"},
+  ],
+  bicep: [
+    {name:"Curl en banco Scott (predicador)", lumbarSafe:true, note:"El banco evita balanceo con la espalda"},
+    {name:"Curl martillo sentado", lumbarSafe:true, note:"Sentado, sin impulso lumbar"},
+  ],
+  pullup: [
+    {name:"Jalón al pecho agarre ancho", lumbarSafe:false, note:"Sentado, mismo patrón"},
+    {name:"Remo invertido (TRX o barra baja)", lumbarSafe:false, note:"Alternativa sin máquina asistida"},
+  ],
+  sentcopa: [
+    {name:"Sentadilla en máquina Smith", lumbarSafe:false, note:"Recorrido guiado"},
+    {name:"Sentadilla en prensa de piernas", lumbarSafe:true, note:"Espalda 100% apoyada, cero carga axial"},
+  ],
+  bootyboulder: [
+    {name:"Hip thrust con barra", lumbarSafe:false, note:"Mismo enfoque glúteo, banco de apoyo"},
+    {name:"Puente de glúteo en el suelo", lumbarSafe:true, note:"Máximo apoyo, carga muy controlada"},
+  ],
+  pesomuerto: [
+    {name:"Hip thrust con barra", lumbarSafe:true, note:"Extensión de cadera sin flexión lumbar bajo carga"},
+    {name:"Peso muerto sumo con mancuerna", lumbarSafe:true, note:"Menor inclinación de tronco que el RDL"},
+  ],
+  remo: [
+    {name:"Remo en máquina con soporte de pecho", lumbarSafe:true, note:"Elimina el riesgo de redondear la espalda"},
+    {name:"Remo polea baja agarre neutro", lumbarSafe:false, note:"Variante de agarre, mismo patrón"},
+  ],
+  peckdeck: [
+    {name:"Aperturas con mancuernas en banco plano", lumbarSafe:false, note:"Versión libre"},
+    {name:"Cruce de poleas de pie", lumbarSafe:false, note:"De pie, tensión constante"},
+  ],
+  vuelolateral: [
+    {name:"Vuelo lateral sentado", lumbarSafe:true, note:"Evita usar impulso de cadera/espalda"},
+    {name:"Elevación lateral en polea baja", lumbarSafe:false, note:"Tensión constante, de pie"},
+  ],
+  kbhalo: [
+    {name:"Pallof press en polea", lumbarSafe:true, note:"Anti-rotación, sin carga rotacional en la columna"},
+    {name:"Face pull con cuerda", lumbarSafe:true, note:"Espalda alta/hombro, sin rotación de tronco"},
+  ],
+};
+
 const SESSIONS = {
-  1: { name: "Superior A", day: "Lunes",   color: "purple", block: 1,
+  // ---- BLOQUE 1 · Adaptación (Sem 1-4) ----
+  1: { name: "Inferior", color: "teal", block: 1, typeIdx: 0,
        exercises: [
-         {id:"L1", name:"Press con barra plano",           sets:3, reps:"10-12", rest:120},
-         {id:"L2", name:"Remo con barra",                  sets:3, reps:"10-12", rest:120},
-         {id:"L3", name:"Press inclinado mancuernas",      sets:3, reps:"12-15", rest:90},
-         {id:"L4", name:"Jalón al pecho agarre neutro",    sets:3, reps:"12-15", rest:90},
-         {id:"L5", name:"Elevaciones laterales",           sets:3, reps:"15",    rest:60},
-         {id:"L6", name:"Curl bíceps mancuernas",          sets:3, reps:"12",    rest:60},
+         {id:"I1", name:"Estocadas", family:"estocadas",                        sets:3, reps:"10/pierna", rest:90},
+         {id:"I2", name:"Prensa de 90°", family:"prensa90",                     sets:3, reps:"10-12",    rest:90},
+         {id:"I3", name:"Leg curl (femoral)", family:"legcurl",                sets:3, reps:"10-12",    rest:60},
+         {id:"I4", name:"Leg extensión (cuádriceps)", family:"legext",        sets:3, reps:"12-15",    rest:60},
+         {id:"I5", name:"Máquina aductor", family:"aductor",                   sets:3, reps:"12-15",    rest:60},
+         {id:"I6", name:"Máquina abductor", family:"abductor",                  sets:3, reps:"12-15",    rest:60},
+         {id:"I7", name:"Sentadilla con salto", family:"saltosquat",              sets:3, reps:"10-12",    rest:90, caution:true},
        ]},
-  2: { name: "Inferior A", day: "Martes",  color: "teal", block: 1,
+  2: { name: "Superior", color: "purple", block: 1, typeIdx: 1,
        exercises: [
-         {id:"M1", name:"Sentadilla con barra",            sets:3, reps:"10-12", rest:120},
-         {id:"M2", name:"Prensa de piernas 45°",           sets:3, reps:"12-15", rest:90},
-         {id:"M3", name:"Extensión cuádriceps",            sets:3, reps:"15",    rest:60},
-         {id:"M4", name:"Hip thrust con barra",            sets:3, reps:"12-15", rest:90},
-         {id:"M5", name:"Curl femoral máquina",            sets:3, reps:"15",    rest:60},
-         {id:"M6", name:"Elevación de talones",            sets:3, reps:"20",    rest:60},
+         {id:"S1", name:"Banco plano", family:"banco",                       sets:3, reps:"8-10",     rest:120},
+         {id:"S2", name:"Pull down agarre prono", family:"pulldown",            sets:3, reps:"10-12",    rest:90},
+         {id:"S3", name:"Press de hombro de pie con mancuernas", family:"presshombro", sets:3, reps:"10-12", rest:90},
+         {id:"S4", name:"Extensión de tríceps polea alta", family:"triceps",   sets:3, reps:"12-15",    rest:60},
+         {id:"S5", name:"Curl de bíceps con mancuernas", family:"bicep",     sets:3, reps:"12-15",    rest:60},
+         {id:"S6", name:"Pull up máquina asistida", family:"pullup",          sets:3, reps:"8-10",     rest:90},
        ]},
-  3: { name: "Superior B", day: "Jueves",  color: "purple", block: 1,
+  3: { name: "Fuerza Full Body", color: "amber", block: 1, typeIdx: 2,
        exercises: [
-         {id:"J1", name:"Dominadas / Jalón asistido",      sets:3, reps:"10-12", rest:120},
-         {id:"J2", name:"Press militar mancuernas",        sets:3, reps:"12",    rest:120},
-         {id:"J3", name:"Remo polea baja agarre neutro",   sets:3, reps:"12-15", rest:90},
-         {id:"J4", name:"Extensión tríceps polea",         sets:3, reps:"15",    rest:60},
-         {id:"J5", name:"Face pull polea alta",            sets:3, reps:"15",    rest:60},
-         {id:"J6", name:"Curl en polea baja",              sets:3, reps:"15",    rest:60},
+         {id:"F1", name:"Sentadilla copa", family:"sentcopa",                   sets:3, reps:"10/pierna", rest:90},
+         {id:"F2", name:"Booty boulder (glúteos)", family:"bootyboulder",           sets:3, reps:"10-12",    rest:90},
+         {id:"F3", name:"Peso muerto con mancuernas", family:"pesomuerto",        sets:3, reps:"10-12",    rest:90, caution:true},
+         {id:"F4", name:"Remo polea agarre cerrado", family:"remo",         sets:3, reps:"10-12",    rest:90},
+         {id:"F5", name:"Peck deck frontal", family:"peckdeck",                 sets:3, reps:"12-15",    rest:60},
+         {id:"F6", name:"Vuelo lateral", family:"vuelolateral",                     sets:3, reps:"12-15",    rest:60},
+         {id:"F7", name:"KB halo", family:"kbhalo",                           sets:3, reps:"10/lado",  rest:60},
        ]},
-  4: { name: "Inferior B", day: "Viernes", color: "teal", block: 1,
+
+  // ---- BLOQUE 2 · Hipertrofia (Sem 5-8) ----
+  4: { name: "Inferior", color: "teal", block: 2, typeIdx: 0,
        exercises: [
-         {id:"V1", name:"Peso muerto rumano",              sets:3, reps:"10-12", rest:120},
-         {id:"V2", name:"Zancada reversa mancuernas",      sets:3, reps:"12/p",  rest:90},
-         {id:"V3", name:"Hip thrust mancuerna",            sets:3, reps:"15",    rest:90},
-         {id:"V4", name:"Abducción cadera máquina",        sets:3, reps:"20",    rest:60},
-         {id:"V5", name:"Plancha frontal",                 sets:3, reps:"30 seg",rest:60},
-         {id:"V6", name:"Puente de glúteo",                sets:3, reps:"20",    rest:60},
+         {id:"I1b", name:"Estocadas", family:"estocadas",                        sets:4, reps:"8-10/pierna", rest:120},
+         {id:"I2b", name:"Prensa de 90°", family:"prensa90",                    sets:4, reps:"8-10",     rest:120},
+         {id:"I3b", name:"Leg curl (femoral)", family:"legcurl",               sets:3, reps:"10-12",    rest:60},
+         {id:"I4b", name:"Leg extensión (cuádriceps)", family:"legext",       sets:3, reps:"12-15",    rest:60},
+         {id:"I5b", name:"Máquina aductor", family:"aductor",                  sets:3, reps:"12-15",    rest:60},
+         {id:"I6b", name:"Máquina abductor", family:"abductor",                 sets:3, reps:"12-15",    rest:60},
+         {id:"I7b", name:"Sentadilla con salto", family:"saltosquat",             sets:3, reps:"8-10",     rest:90, caution:true},
        ]},
-  5: { name: "Superior A", day: "Lunes",   color: "purple", block: 2,
+  5: { name: "Superior", color: "purple", block: 2, typeIdx: 1,
        exercises: [
-         {id:"L1b", name:"Press con barra plano",          sets:4, reps:"8-10",  rest:150},
-         {id:"L2b", name:"Remo con barra",                 sets:4, reps:"8-10",  rest:150},
-         {id:"L3b", name:"Press inclinado mancuernas",     sets:3, reps:"10-12", rest:90},
-         {id:"L4b", name:"Jalón agarre prono ancho",       sets:3, reps:"10-12", rest:90},
-         {id:"L5b", name:"Elevaciones laterales",          sets:4, reps:"12-15", rest:60},
-         {id:"L6b", name:"Curl bíceps barra",              sets:3, reps:"10-12", rest:60},
+         {id:"S1b", name:"Banco plano", family:"banco",                      sets:4, reps:"6-8",      rest:150},
+         {id:"S2b", name:"Pull down agarre prono", family:"pulldown",           sets:4, reps:"8-10",     rest:120},
+         {id:"S3b", name:"Press de hombro de pie con mancuernas", family:"presshombro", sets:3, reps:"10-12", rest:90},
+         {id:"S4b", name:"Extensión de tríceps polea alta", family:"triceps",  sets:3, reps:"10-12",    rest:60},
+         {id:"S5b", name:"Curl de bíceps con mancuernas", family:"bicep",    sets:3, reps:"10-12",    rest:60},
+         {id:"S6b", name:"Pull up máquina asistida", family:"pullup",         sets:4, reps:"6-8",      rest:120},
        ]},
-  6: { name: "Inferior A", day: "Martes",  color: "teal", block: 2,
+  6: { name: "Fuerza Full Body", color: "amber", block: 2, typeIdx: 2,
        exercises: [
-         {id:"M1b", name:"Sentadilla con barra",           sets:4, reps:"8-10",  rest:150},
-         {id:"M2b", name:"Sentadilla búlgara mancuernas",  sets:3, reps:"10/p",  rest:120},
-         {id:"M3b", name:"Prensa de piernas 45°",          sets:3, reps:"12-15", rest:90},
-         {id:"M4b", name:"Hip thrust con barra",           sets:4, reps:"10-12", rest:90},
-         {id:"M5b", name:"Curl femoral máquina",           sets:3, reps:"12",    rest:60},
-         {id:"M6b", name:"Elevación de talones",           sets:3, reps:"15-20", rest:60},
+         {id:"F1b", name:"Sentadilla copa", family:"sentcopa",                  sets:4, reps:"8-10/pierna", rest:120},
+         {id:"F2b", name:"Booty boulder (glúteos)", family:"bootyboulder",          sets:4, reps:"8-10",     rest:90},
+         {id:"F3b", name:"Peso muerto con mancuernas", family:"pesomuerto",       sets:4, reps:"8-10",     rest:120, caution:true},
+         {id:"F4b", name:"Remo polea agarre cerrado", family:"remo",        sets:4, reps:"8-10",     rest:90},
+         {id:"F5b", name:"Peck deck frontal", family:"peckdeck",                sets:3, reps:"10-12",    rest:60},
+         {id:"F6b", name:"Vuelo lateral", family:"vuelolateral",                    sets:3, reps:"12-15",    rest:60},
+         {id:"F7b", name:"KB halo", family:"kbhalo",                          sets:3, reps:"10/lado",  rest:60},
        ]},
-  7: { name: "Superior B", day: "Jueves",  color: "purple", block: 2,
+
+  // ---- BLOQUE 3 · Fuerza (Sem 9-12) ----
+  7: { name: "Inferior", color: "teal", block: 3, typeIdx: 0,
        exercises: [
-         {id:"J1b", name:"Dominadas con peso / asistidas", sets:4, reps:"6-10",  rest:150},
-         {id:"J2b", name:"Press militar mancuernas",       sets:4, reps:"10",    rest:120},
-         {id:"J3b", name:"Remo polea baja agarre neutro",  sets:4, reps:"10-12", rest:90},
-         {id:"J4b", name:"Fondos en paralelas",            sets:3, reps:"10-12", rest:90},
-         {id:"J5b", name:"Face pull polea alta",           sets:3, reps:"15",    rest:60},
-         {id:"J6b", name:"Curl martillo mancuernas",       sets:3, reps:"12",    rest:60},
+         {id:"I1c", name:"Estocadas", family:"estocadas",                        sets:4, reps:"6-8/pierna", rest:150},
+         {id:"I2c", name:"Prensa de 90°", family:"prensa90",                    sets:5, reps:"6-8",      rest:150},
+         {id:"I3c", name:"Leg curl (femoral)", family:"legcurl",               sets:3, reps:"8-10",     rest:90},
+         {id:"I4c", name:"Leg extensión (cuádriceps)", family:"legext",       sets:3, reps:"10-12",    rest:60},
+         {id:"I5c", name:"Máquina aductor", family:"aductor",                  sets:3, reps:"12",       rest:60},
+         {id:"I6c", name:"Máquina abductor", family:"abductor",                 sets:3, reps:"12",       rest:60},
+         {id:"I7c", name:"Sentadilla con salto", family:"saltosquat",             sets:3, reps:"6-8",      rest:90, caution:true},
        ]},
-  8: { name: "Inferior B", day: "Viernes", color: "teal", block: 2,
+  8: { name: "Superior", color: "purple", block: 3, typeIdx: 1,
        exercises: [
-         {id:"V1b", name:"Peso muerto rumano",             sets:4, reps:"8-10",  rest:150},
-         {id:"V2b", name:"Sentadilla búlgara mancuernas",  sets:3, reps:"10/p",  rest:90},
-         {id:"V3b", name:"Hip thrust con barra",           sets:4, reps:"10-12", rest:90},
-         {id:"V4b", name:"Zancada reversa mancuernas",     sets:3, reps:"10/p",  rest:90},
-         {id:"V5b", name:"Abducción cadera máquina",       sets:3, reps:"15-20", rest:60},
-         {id:"V6b", name:"Plancha lateral",                sets:3, reps:"30 seg/lado",rest:60},
+         {id:"S1c", name:"Banco plano", family:"banco",                      sets:5, reps:"5-6",      rest:180},
+         {id:"S2c", name:"Pull down agarre prono", family:"pulldown",           sets:4, reps:"6-8",      rest:150},
+         {id:"S3c", name:"Press de hombro de pie con mancuernas", family:"presshombro", sets:4, reps:"8-10", rest:120},
+         {id:"S4c", name:"Extensión de tríceps polea alta", family:"triceps",  sets:3, reps:"10",       rest:60},
+         {id:"S5c", name:"Curl de bíceps con mancuernas", family:"bicep",    sets:3, reps:"10",       rest:60},
+         {id:"S6c", name:"Pull up máquina asistida", family:"pullup",         sets:5, reps:"5-6",      rest:150},
        ]},
-  9: { name: "Superior A", day: "Lunes",   color: "purple", block: 3,
+  9: { name: "Fuerza Full Body", color: "amber", block: 3, typeIdx: 2,
        exercises: [
-         {id:"L1c", name:"Press con barra plano",          sets:5, reps:"5-6",   rest:180},
-         {id:"L2c", name:"Remo mancuerna a un brazo",      sets:4, reps:"8-10",  rest:120},
-         {id:"L3c", name:"Press inclinado barra",          sets:3, reps:"8-10",  rest:120},
-         {id:"L4c", name:"Jalón agarre estrecho neutro",   sets:4, reps:"8-10",  rest:90},
-         {id:"L5c", name:"Elevaciones frontales+lat combo",sets:3, reps:"10+10", rest:90},
-         {id:"L6c", name:"Curl predicador barra Z",        sets:3, reps:"8-10",  rest:60},
-       ]},
-  10:{ name: "Inferior A", day: "Martes",  color: "teal", block: 3,
-       exercises: [
-         {id:"M1c", name:"Sentadilla con barra",           sets:5, reps:"5-6",   rest:180},
-         {id:"M2c", name:"Sentadilla búlgara con barra",   sets:4, reps:"8/p",   rest:120},
-         {id:"M3c", name:"Prensa piernas (pausa abajo)",   sets:3, reps:"8-10",  rest:120},
-         {id:"M4c", name:"Hip thrust con barra",           sets:5, reps:"8-10",  rest:120},
-         {id:"M5c", name:"Curl femoral nórdico (asist.)",  sets:3, reps:"6-8",   rest:90},
-         {id:"M6c", name:"Elevación de talones sentada",   sets:4, reps:"12-15", rest:60},
-       ]},
-  11:{ name: "Superior B", day: "Jueves",  color: "purple", block: 3,
-       exercises: [
-         {id:"J1c", name:"Dominadas con lastre",           sets:5, reps:"5-8",   rest:180},
-         {id:"J2c", name:"Press militar barra de pie",     sets:4, reps:"6-8",   rest:150},
-         {id:"J3c", name:"Remo Pendlay con barra",         sets:4, reps:"6-8",   rest:150},
-         {id:"J4c", name:"Fondos con lastre",              sets:3, reps:"8-10",  rest:120},
-         {id:"J5c", name:"Face pull + retracción escap.",  sets:3, reps:"12+12", rest:60},
-         {id:"J6c", name:"Curl bíceps mancuerna inclinado",sets:3, reps:"10-12", rest:60},
-       ]},
-  12:{ name: "Inferior B", day: "Viernes", color: "teal", block: 3,
-       exercises: [
-         {id:"V1c", name:"Peso muerto convencional",       sets:5, reps:"5-6",   rest:180},
-         {id:"V2c", name:"Sentadilla búlgara con barra",   sets:4, reps:"8/p",   rest:120},
-         {id:"V3c", name:"Hip thrust barra (pausa 3 seg)", sets:4, reps:"8-10",  rest:120},
-         {id:"V4c", name:"Peso muerto a una pierna",       sets:3, reps:"10/p",  rest:90},
-         {id:"V5c", name:"Abducción cadera máquina",       sets:3, reps:"15",    rest:60},
-         {id:"V6c", name:"Plancha con desplazamiento",     sets:3, reps:"10/lado",rest:60},
+         {id:"F1c", name:"Sentadilla copa", family:"sentcopa",                  sets:4, reps:"6-8/pierna", rest:150},
+         {id:"F2c", name:"Booty boulder (glúteos)", family:"bootyboulder",          sets:4, reps:"6-8",      rest:120},
+         {id:"F3c", name:"Peso muerto con mancuernas", family:"pesomuerto",       sets:5, reps:"5-6",      rest:180, caution:true},
+         {id:"F4c", name:"Remo polea agarre cerrado", family:"remo",        sets:4, reps:"6-8",      rest:120},
+         {id:"F5c", name:"Peck deck frontal", family:"peckdeck",                sets:3, reps:"8-10",     rest:60},
+         {id:"F6c", name:"Vuelo lateral", family:"vuelolateral",                    sets:3, reps:"12",       rest:60},
+         {id:"F7c", name:"KB halo", family:"kbhalo",                          sets:3, reps:"8/lado",   rest:60},
        ]},
 };
 
-const WEEK_DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 const DELOAD_WEEKS = [4,8,12];
-const DAY_TO_SESSION = {1:[1,2],2:[3,4],3:[5,6],4:[7,8],5:[9,10],6:[11,12]};
 
 let state = loadState();
 let timerInterval = null, timerSec = 0, timerRunning = false;
@@ -452,17 +564,125 @@ function getCurrentWeek() {
   return Math.min(Math.max(diff+1, 1), 12);
 }
 
-function getTodaySession() {
-  const dow = new Date().getDay();
-  const jsDay = dow === 0 ? 7 : dow;
+function getCurrentBlockNum() {
   const week = getCurrentWeek();
-  const blockNum = week <= 4 ? 1 : week <= 8 ? 2 : 3;
-  const blockOffset = blockNum === 1 ? 0 : blockNum === 2 ? 4 : 8;
-  if (jsDay === 1) return SESSIONS[1 + blockOffset];
-  if (jsDay === 2) return SESSIONS[2 + blockOffset];
-  if (jsDay === 4) return SESSIONS[3 + blockOffset];
-  if (jsDay === 5) return SESSIONS[4 + blockOffset];
+  return week <= 4 ? 1 : week <= 8 ? 2 : 3;
+}
+
+// --- Reemplazo de ejercicios ---
+function findExerciseById(exId) {
+  for (const key in SESSIONS) {
+    const found = SESSIONS[key].exercises.find(e => e.id === exId);
+    if (found) return found;
+  }
   return null;
+}
+
+function getEffectiveExercise(ex) {
+  const swap = state.swaps?.[ex.id];
+  if (swap) return { ...ex, name: swap.name, isSwapped: true };
+  return ex;
+}
+
+function openSwap(exId) {
+  const ex = findExerciseById(exId);
+  if (!ex) return;
+  const alts = ALT_MAP[ex.family] || [];
+  const current = state.swaps?.[exId];
+  const eff = getEffectiveExercise(ex);
+
+  let html = `<div class="swap-sheet-handle"></div>
+    <div class="swap-sheet-title">Reemplazar ejercicio</div>
+    <div class="swap-sheet-name">${eff.name}</div>`;
+
+  alts.forEach((alt, i) => {
+    const isActive = current && current.name === alt.name;
+    html += `<div class="swap-option" style="${isActive ? 'border-color:var(--purple)' : ''}" onclick="applySwap('${exId}', ${i})">
+      <div class="swap-option-name">${alt.name} ${alt.lumbarSafe ? '<span class="swap-lumbar-tag">⭐ Cuida tu espalda baja</span>' : ''}</div>
+      <div class="swap-option-note">${alt.note}</div>
+    </div>`;
+  });
+
+  if (current) {
+    html += `<div class="swap-restore" onclick="restoreOriginal('${exId}')"><i class="ti ti-arrow-back-up"></i> Volver al ejercicio original</div>`;
+  }
+  html += `<div class="swap-cancel" onclick="closeSwap()">Cancelar</div>`;
+
+  document.getElementById('swap-sheet-content').innerHTML = html;
+  document.getElementById('swap-overlay').classList.add('visible');
+}
+
+function applySwap(exId, altIdx) {
+  const ex = findExerciseById(exId);
+  const alt = ALT_MAP[ex.family]?.[altIdx];
+  if (!alt) return;
+  if (!state.swaps) state.swaps = {};
+  state.swaps[exId] = { name: alt.name, note: alt.note, lumbarSafe: alt.lumbarSafe };
+  saveState();
+  closeSwap();
+  renderToday();
+}
+
+function restoreOriginal(exId) {
+  if (state.swaps) delete state.swaps[exId];
+  saveState();
+  closeSwap();
+  renderToday();
+}
+
+function closeSwap() {
+  document.getElementById('swap-overlay').classList.remove('visible');
+}
+
+// Devuelve las 3 sesiones (Inferior, Superior, Full Body) del bloque actual
+function getBlockSessions() {
+  const blockNum = getCurrentBlockNum();
+  const offset = (blockNum - 1) * 3;
+  return [SESSIONS[1 + offset], SESSIONS[2 + offset], SESSIONS[3 + offset]];
+}
+
+// Sugerencia por rotación: después de cada sesión completada avanza al siguiente tipo
+function getSuggestedTypeIdx() {
+  const last = state.lastSessionTypeIdx;
+  if (last === undefined || last === null) return 0;
+  return (last + 1) % 3;
+}
+
+function getTodaySession() {
+  const todayKey = getTodayKey();
+  const choice = state[todayKey]?._sessionTypeIdx;
+  const blockSessions = getBlockSessions();
+  if (choice === 'rest') return null;
+  const typeIdx = (choice !== undefined && choice !== null) ? choice : getSuggestedTypeIdx();
+  return blockSessions[typeIdx];
+}
+
+function selectTodaySession(typeIdxOrRest) {
+  const todayKey = getTodayKey();
+  if (!state[todayKey]) state[todayKey] = {};
+  state[todayKey]._sessionTypeIdx = typeIdxOrRest;
+  saveState();
+  renderToday();
+}
+
+function renderSessionPicker() {
+  const todayKey = getTodayKey();
+  const stored = state[todayKey]?._sessionTypeIdx;
+  const suggested = getSuggestedTypeIdx();
+  const current = (stored !== undefined && stored !== null) ? stored : suggested;
+
+  const pills = SESSION_TYPES.map((t, i) => {
+    const isActive = current === i;
+    const isSuggested = suggested === i && (stored === undefined || stored === null);
+    return `<button class="session-pill ${isActive ? 'active ' + t.color : ''}" onclick="selectTodaySession(${i})">
+      ${isSuggested ? '<span class="star">★</span> ' : ''}${t.label}
+    </button>`;
+  }).join('');
+
+  const restActive = current === 'rest';
+  const restPill = `<button class="session-pill ${restActive ? 'active rest' : ''}" onclick="selectTodaySession('rest')"><i class="ti ti-moon"></i> Descanso</button>`;
+
+  document.getElementById('session-picker').innerHTML = pills + restPill;
 }
 
 function getTodayKey() {
@@ -482,11 +702,12 @@ function showPage(name, el) {
 function renderToday() {
   const week = getCurrentWeek();
   const isDeload = DELOAD_WEEKS.includes(week);
-  const sess = getTodaySession();
   const dow = new Date().getDay();
   const dayNames = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
   document.getElementById('today-title').textContent = `${dayNames[dow]}, ${new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long'})}`;
+
+  renderSessionPicker();
 
   const notifArea = document.getElementById('notif-area');
   if (isDeload) {
@@ -494,6 +715,7 @@ function renderToday() {
   } else { notifArea.innerHTML = ''; }
 
   const container = document.getElementById('today-session');
+  const sess = getTodaySession();
 
   if (!sess) {
     document.getElementById('today-subtitle').textContent = `Semana ${week} · Día de descanso — Recuperación activa`;
@@ -511,20 +733,23 @@ function renderToday() {
 
   let html = `<div class="card">
     <div class="session-header">
-      <div class="session-icon ${sess.color}"><i class="ti ti-${sess.color==='teal'?'run':'barbell'}"></i></div>
-      <div class="session-info"><h2>${sess.name}</h2><p>${sess.day} · ${sess.exercises.length} ejercicios</p></div>
+      <div class="session-icon ${sess.color}"><i class="ti ti-${sess.color==='teal'?'run':sess.color==='amber'?'bolt':'barbell'}"></i></div>
+      <div class="session-info"><h2>${sess.name}</h2><p>${sess.exercises.length} ejercicios</p></div>
     </div>`;
 
   sess.exercises.forEach((ex, i) => {
     const done = todayLog[ex.id]?.done;
     const logData = todayLog[ex.id];
+    const eff = getEffectiveExercise(ex);
     html += `<div class="ex-row">
       <div class="ex-num">${i+1}</div>
       <div style="flex:1">
-        <div class="ex-name">${ex.name}</div>
+        <div class="ex-name">${eff.name} ${eff.isSwapped ? '<span style="font-size:10px;color:var(--purple);font-weight:600;">· reemplazo</span>' : ''}</div>
         <div class="ex-target">${ex.sets} series · ${ex.reps} reps</div>
+        ${ex.caution && !eff.isSwapped ? `<div class="ex-caution"><i class="ti ti-alert-triangle" style="font-size:12px"></i> Cuida la zona lumbar: espalda neutra, sin arquear</div>` : ''}
         ${logData?.weight ? `<div style="font-size:12px; color:var(--teal); margin-top:2px;"><i class="ti ti-check" style="font-size:11px"></i> ${logData.weight}kg · ${logData.reps||''}</div>` : ''}
       </div>
+      <button onclick="openSwap('${ex.id}')" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:4px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-replace" style="font-size:18px"></i></button>
       <button onclick="startTimer(${ex.rest})" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-clock" style="font-size:18px"></i>${ex.rest}s</button>
       <div class="ex-done ${done?'done':''}" onclick="toggleDone('${ex.id}')"><i class="ti ti-check" style="font-size:14px"></i></div>
     </div>`;
@@ -551,9 +776,11 @@ function toggleDone(exId) {
 
 function finishSession() {
   const todayKey = getTodayKey();
+  const sess = getTodaySession();
   if (!state[todayKey]) state[todayKey] = {};
   state[todayKey]._completed = true;
   state[todayKey]._time = new Date().toISOString();
+  if (sess) state.lastSessionTypeIdx = sess.typeIdx;
   saveState();
   renderToday();
 }
@@ -570,7 +797,7 @@ async function sendToAI() {
   const sess = getTodaySession();
   if (!sess) { result.innerHTML = 'Hoy es día de descanso, no hay ejercicios que registrar.'; return; }
 
-  const exList = sess.exercises.map(e => `${e.id}: ${e.name} (${e.sets}x${e.reps})`).join('\n');
+  const exList = sess.exercises.map(e => { const eff = getEffectiveExercise(e); return `${e.id}: ${eff.name} (${e.sets}x${e.reps})`; }).join('\n');
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -688,11 +915,11 @@ function renderWeek() {
     const d = new Date(weekStart); d.setDate(weekStart.getDate() + i-1);
     const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     const isToday = i === dow;
-    const isRest = [3,6,7].includes(i);
     const done = state[key]?._completed;
+    const isRestChoice = state[key]?._sessionTypeIdx === 'rest';
     if (done) sessCount++;
     const dNames = ['','Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-    let dotClass = isRest ? 'rest' : done ? 'done' : isToday ? 'today' : '';
+    let dotClass = done ? 'done' : isRestChoice ? 'rest' : isToday ? 'today' : '';
     return `<div class="week-day"><div class="week-day-name">${dNames[i]}</div><div class="week-day-dot ${dotClass}">${d.getDate()}</div></div>`;
   }).join('');
   document.getElementById('week-calendar').innerHTML = calHtml;
@@ -734,13 +961,13 @@ function selectBlock(b, el) {
 
 function buildExSelect() {
   const sel = document.getElementById('ex-select');
-  const blockStart = (currentBlock-1)*4 + 1;
-  const blockEnd = currentBlock*4;
+  const blockStart = (currentBlock-1)*3 + 1;
+  const blockEnd = currentBlock*3;
   let opts = [];
   for (let s = blockStart; s <= blockEnd; s++) {
     const sess = SESSIONS[s];
     if (!sess) continue;
-    sess.exercises.forEach(ex => opts.push(`<option value="${ex.id}">${ex.name}</option>`));
+    sess.exercises.forEach(ex => { const eff = getEffectiveExercise(ex); opts.push(`<option value="${ex.id}">${eff.name}</option>`); });
   }
   sel.innerHTML = opts.join('');
 }
@@ -784,16 +1011,17 @@ function renderChart() {
 
 function renderPRs() {
   const prList = document.getElementById('pr-list');
-  const blockStart = (currentBlock-1)*4 + 1;
-  const blockEnd = currentBlock*4;
+  const blockStart = (currentBlock-1)*3 + 1;
+  const blockEnd = currentBlock*3;
   let allExs = [];
   for (let s = blockStart; s <= blockEnd; s++) {
     if (SESSIONS[s]) allExs = allExs.concat(SESSIONS[s].exercises);
   }
   const html = allExs.map(ex => {
+    const eff = getEffectiveExercise(ex);
     const max = getMaxWeight(ex.id, Infinity);
     return `<div class="ex-row">
-      <div class="ex-name" style="font-size:13px">${ex.name}</div>
+      <div class="ex-name" style="font-size:13px">${eff.name}</div>
       ${max ? `<span class="badge badge-amber">${max} kg</span>` : '<span style="font-size:12px;color:var(--text-3)">—</span>'}
     </div>`;
   }).join('');
