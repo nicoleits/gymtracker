@@ -64,7 +64,7 @@
   .session-info p { font-size: 12px; color: var(--text-2); }
 
   /* Exercise rows */
-  .ex-row { display: flex; align-items: center; padding: 11px 0; border-bottom: 0.5px solid var(--border); gap: 10px; }
+  .ex-row { display: flex; align-items: center; padding: 11px 0; border-bottom: 0.5px solid var(--border); gap: 6px; }
   .ex-row:last-child { border-bottom: none; }
   .ex-num { width: 26px; height: 26px; border-radius: 50%; background: var(--purple-light); color: var(--purple-dark); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .ex-name { flex: 1; font-size: 14px; font-weight: 500; }
@@ -176,6 +176,13 @@
   .swap-lumbar-tag { font-size: 10px; background: var(--teal-light); color: var(--teal-dark); padding: 1px 7px; border-radius: 10px; font-weight: 600; }
   .swap-restore { text-align: center; font-size: 13px; color: var(--purple); font-weight: 500; padding: 12px 0 2px; cursor: pointer; }
   .swap-cancel { text-align: center; font-size: 13px; color: var(--text-3); padding: 6px 0; cursor: pointer; }
+
+  .edit-field { margin-bottom: 14px; }
+  .edit-field label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; font-weight: 500; }
+  .edit-field input { width: 100%; box-sizing: border-box; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 11px 12px; font-size: 15px; color: var(--text); outline: none; font-family: inherit; }
+  .edit-field input:focus { border-color: var(--purple); }
+  .edit-field-hint { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+  .edit-save-btn { width: 100%; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -190,6 +197,8 @@
       </div>
 
       <div id="notif-area"></div>
+
+      <div id="past-day-bar"></div>
 
       <div class="session-picker" id="session-picker"></div>
 
@@ -551,6 +560,9 @@ let state = loadState();
 let timerInterval = null, timerSec = 0, timerRunning = false;
 let chartInstance = null;
 let currentBlock = 1;
+let viewDate = null; // null = hoy; Date = editando un día anterior
+
+function getActiveDate() { return viewDate ? new Date(viewDate) : new Date(); }
 
 function loadState() {
   try { return JSON.parse(localStorage.getItem('gymtracker') || '{}'); } catch(e) { return {}; }
@@ -560,7 +572,7 @@ function saveState() { localStorage.setItem('gymtracker', JSON.stringify(state))
 function getCurrentWeek() {
   const start = state.startDate ? new Date(state.startDate) : new Date();
   if (!state.startDate) { state.startDate = start.toISOString(); saveState(); }
-  const diff = Math.floor((new Date() - start) / (7*24*3600*1000));
+  const diff = Math.floor((getActiveDate() - start) / (7*24*3600*1000));
   return Math.min(Math.max(diff+1, 1), 12);
 }
 
@@ -634,6 +646,79 @@ function closeSwap() {
   document.getElementById('swap-overlay').classList.remove('visible');
 }
 
+// --- Edición manual de series / reps / peso ---
+function getLastLoggedEntry(exId) {
+  if (!state.history) return null;
+  const entries = state.history.filter(h => h.exId === exId);
+  if (!entries.length) return null;
+  return entries[entries.length - 1];
+}
+
+function openEditLog(exId) {
+  const ex = findExerciseById(exId);
+  if (!ex) return;
+  const eff = getEffectiveExercise(ex);
+  const todayKey = getTodayKey();
+  const current = state[todayKey]?.[exId] || {};
+  const last = getLastLoggedEntry(exId);
+
+  const prefWeight = current.weight ?? last?.weight ?? '';
+  const prefSets = current.setsCompleted ?? ex.sets;
+  const prefReps = current.reps ?? last?.reps ?? ex.reps;
+
+  const html = `<div class="swap-sheet-handle"></div>
+    <div class="swap-sheet-title">Registrar / editar</div>
+    <div class="swap-sheet-name">${eff.name}</div>
+    <div class="edit-field">
+      <label>Peso (kg)</label>
+      <input type="number" id="edit-weight" value="${prefWeight}" step="0.5" inputmode="decimal" placeholder="Ej: 12.5">
+    </div>
+    <div class="edit-field">
+      <label>Series realizadas</label>
+      <input type="number" id="edit-sets" value="${prefSets}" min="1" max="10" inputmode="numeric">
+      <div class="edit-field-hint">Meta del plan: ${ex.sets} series</div>
+    </div>
+    <div class="edit-field">
+      <label>Repeticiones (por serie, separadas por coma)</label>
+      <input type="text" id="edit-reps" value="${prefReps}" placeholder="Ej: 12,11,10">
+      <div class="edit-field-hint">Meta del plan: ${ex.reps} reps</div>
+    </div>
+    <button class="btn btn-teal edit-save-btn" onclick="saveEditLog('${exId}')"><i class="ti ti-check"></i> Guardar</button>
+    <div class="swap-cancel" onclick="closeSwap()">Cancelar</div>`;
+
+  document.getElementById('swap-sheet-content').innerHTML = html;
+  document.getElementById('swap-overlay').classList.add('visible');
+}
+
+function saveEditLog(exId) {
+  const weight = parseFloat(document.getElementById('edit-weight').value) || 0;
+  const setsCompleted = parseInt(document.getElementById('edit-sets').value) || 0;
+  const reps = document.getElementById('edit-reps').value.trim();
+  const ex = findExerciseById(exId);
+  const eff = getEffectiveExercise(ex);
+  const todayKey = getTodayKey();
+  const activeDate = getActiveDate();
+
+  if (!state[todayKey]) state[todayKey] = {};
+  if (!state[todayKey][exId]) state[todayKey][exId] = {};
+  Object.assign(state[todayKey][exId], {
+    weight, setsCompleted, reps, done: true, ts: activeDate.toISOString()
+  });
+
+  // Actualiza (o crea) la entrada de historial de ese día para este ejercicio, sin duplicar
+  if (!state.history) state.history = [];
+  const dayStr = activeDate.toDateString();
+  const existingIdx = state.history.findIndex(h => h.exId === exId && new Date(h.date).toDateString() === dayStr);
+  const entry = { exId, name: eff.name, weight, reps, date: activeDate.toISOString() };
+  if (existingIdx >= 0) state.history[existingIdx] = entry;
+  else state.history.push(entry);
+  state.history.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  saveState();
+  closeSwap();
+  renderToday();
+}
+
 // Devuelve las 3 sesiones (Inferior, Superior, Full Body) del bloque actual
 function getBlockSessions() {
   const blockNum = getCurrentBlockNum();
@@ -686,7 +771,50 @@ function renderSessionPicker() {
 }
 
 function getTodayKey() {
-  const d = new Date(); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const d = getActiveDate(); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function toInputDate(d) {
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderPastDayBar() {
+  const bar = document.getElementById('past-day-bar');
+  if (viewDate) {
+    const label = viewDate.toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'});
+    bar.innerHTML = `<div class="notif-banner" style="background:var(--purple-light); border-color:var(--purple); color:var(--purple-dark); display:flex; align-items:center; gap:8px;">
+      <i class="ti ti-calendar-event"></i>
+      <span style="flex:1;">Editando: ${label}</span>
+      <span style="font-weight:600; text-decoration:underline; cursor:pointer; white-space:nowrap;" onclick="resetToToday()">Volver a hoy</span>
+    </div>`;
+  } else {
+    bar.innerHTML = `<div style="text-align:right; margin-bottom:2px;">
+      <span style="font-size:12px; color:var(--purple); font-weight:500; cursor:pointer;" onclick="showPastDatePicker()">
+        <i class="ti ti-calendar-plus" style="font-size:14px; vertical-align:-2px;"></i> Registrar día anterior
+      </span>
+      <input type="date" id="past-date-input" style="display:none; margin-top:8px; width:100%; box-sizing:border-box; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; font-size:14px; font-family:inherit;" max="${toInputDate(new Date())}" onchange="onPastDateChange(this.value)">
+    </div>`;
+  }
+}
+
+function showPastDatePicker() {
+  const inp = document.getElementById('past-date-input');
+  inp.style.display = 'block';
+  if (inp.showPicker) { try { inp.showPicker(); } catch(e) {} }
+  inp.focus();
+}
+
+function onPastDateChange(val) {
+  if (!val) return;
+  const [y,m,d] = val.split('-').map(Number);
+  viewDate = new Date(y, m-1, d);
+  renderToday();
+}
+
+function resetToToday() {
+  viewDate = null;
+  renderToday();
 }
 
 function showPage(name, el) {
@@ -702,11 +830,13 @@ function showPage(name, el) {
 function renderToday() {
   const week = getCurrentWeek();
   const isDeload = DELOAD_WEEKS.includes(week);
-  const dow = new Date().getDay();
+  const activeDate = getActiveDate();
+  const dow = activeDate.getDay();
   const dayNames = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
-  document.getElementById('today-title').textContent = `${dayNames[dow]}, ${new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long'})}`;
+  document.getElementById('today-title').textContent = `${dayNames[dow]}, ${activeDate.toLocaleDateString('es-ES',{day:'numeric',month:'long'})}`;
 
+  renderPastDayBar();
   renderSessionPicker();
 
   const notifArea = document.getElementById('notif-area');
@@ -719,14 +849,15 @@ function renderToday() {
 
   if (!sess) {
     document.getElementById('today-subtitle').textContent = `Semana ${week} · Día de descanso — Recuperación activa`;
-    container.innerHTML = `<div class="no-session"><i class="ti ti-leaf" style="color:var(--teal)"></i><p style="font-size:16px; font-weight:500; color:var(--text);">Hoy es día de descanso</p><p style="margin-top:8px;">Camina 20-30 min, haz movilidad lumbar o disfruta la recuperación.</p></div>`;
+    const restMsg = viewDate ? 'Ese día quedó marcado como descanso' : 'Hoy es día de descanso';
+    container.innerHTML = `<div class="no-session"><i class="ti ti-leaf" style="color:var(--teal)"></i><p style="font-size:16px; font-weight:500; color:var(--text);">${restMsg}</p><p style="margin-top:8px;">Camina 20-30 min, haz movilidad lumbar o disfruta la recuperación.</p></div>`;
     document.getElementById('ai-section').style.display='none';
     return;
   }
 
   const blockNames = {1:'Adaptación',2:'Hipertrofia',3:'Fuerza'};
   document.getElementById('today-subtitle').textContent = `Semana ${week} · Bloque ${sess.block} ${blockNames[sess.block]}`;
-  document.getElementById('ai-section').style.display='block';
+  document.getElementById('ai-section').style.display = 'block';
 
   const todayKey = getTodayKey();
   const todayLog = state[todayKey] || {};
@@ -747,9 +878,10 @@ function renderToday() {
         <div class="ex-name">${eff.name} ${eff.isSwapped ? '<span style="font-size:10px;color:var(--purple);font-weight:600;">· reemplazo</span>' : ''}</div>
         <div class="ex-target">${ex.sets} series · ${ex.reps} reps</div>
         ${ex.caution && !eff.isSwapped ? `<div class="ex-caution"><i class="ti ti-alert-triangle" style="font-size:12px"></i> Cuida la zona lumbar: espalda neutra, sin arquear</div>` : ''}
-        ${logData?.weight ? `<div style="font-size:12px; color:var(--teal); margin-top:2px;"><i class="ti ti-check" style="font-size:11px"></i> ${logData.weight}kg · ${logData.reps||''}</div>` : ''}
+        ${logData?.weight ? `<div style="font-size:12px; color:var(--teal); margin-top:2px;"><i class="ti ti-check" style="font-size:11px"></i> ${logData.weight}kg · ${logData.setsCompleted||ex.sets}x${logData.reps||''}</div>` : ''}
       </div>
-      <button onclick="openSwap('${ex.id}')" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:4px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-replace" style="font-size:18px"></i></button>
+      <button onclick="openEditLog('${ex.id}')" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:3px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-edit" style="font-size:18px"></i></button>
+      <button onclick="openSwap('${ex.id}')" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:3px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-replace" style="font-size:18px"></i></button>
       <button onclick="startTimer(${ex.rest})" style="background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;"><i class="ti ti-clock" style="font-size:18px"></i>${ex.rest}s</button>
       <div class="ex-done ${done?'done':''}" onclick="toggleDone('${ex.id}')"><i class="ti ti-check" style="font-size:14px"></i></div>
     </div>`;
@@ -758,7 +890,7 @@ function renderToday() {
   const allDone = sess.exercises.every(ex => todayLog[ex.id]?.done);
   html += `<div style="margin-top:14px;">
     <button class="btn btn-teal btn-block" onclick="finishSession()" ${allDone?'style="opacity:0.5"':''}>
-      <i class="ti ti-trophy"></i> ${allDone ? 'Sesión completada!' : 'Marcar sesión como completada'}
+      <i class="ti ti-trophy"></i> ${allDone ? (viewDate ? 'Día guardado' : 'Sesión completada!') : (viewDate ? 'Guardar este día' : 'Marcar sesión como completada')}
     </button>
   </div></div>`;
 
@@ -780,7 +912,7 @@ function finishSession() {
   if (!state[todayKey]) state[todayKey] = {};
   state[todayKey]._completed = true;
   state[todayKey]._time = new Date().toISOString();
-  if (sess) state.lastSessionTypeIdx = sess.typeIdx;
+  if (sess && !viewDate) state.lastSessionTypeIdx = sess.typeIdx;
   saveState();
   renderToday();
 }
@@ -795,7 +927,7 @@ async function sendToAI() {
   result.innerHTML = '<span class="ai-thinking">Interpretando...</span>';
 
   const sess = getTodaySession();
-  if (!sess) { result.innerHTML = 'Hoy es día de descanso, no hay ejercicios que registrar.'; return; }
+  if (!sess) { result.innerHTML = viewDate ? 'Ese día fue de descanso, no hay ejercicios que registrar.' : 'Hoy es día de descanso, no hay ejercicios que registrar.'; return; }
 
   const exList = sess.exercises.map(e => { const eff = getEffectiveExercise(e); return `${e.id}: ${eff.name} (${e.sets}x${e.reps})`; }).join('\n');
 
@@ -830,6 +962,7 @@ Si no puedes identificar el ejercicio o los datos, responde: {"error": "No pude 
     }
 
     const todayKey = getTodayKey();
+    const activeDate = getActiveDate();
     if (!state[todayKey]) state[todayKey] = {};
     if (!state[todayKey][parsed.exercise_id]) state[todayKey][parsed.exercise_id] = {};
     Object.assign(state[todayKey][parsed.exercise_id], {
@@ -837,12 +970,17 @@ Si no puedes identificar el ejercicio o los datos, responde: {"error": "No pude 
       reps: parsed.sets_reps,
       done: true,
       note: parsed.notes,
-      ts: new Date().toISOString()
+      ts: activeDate.toISOString()
     });
 
     const exId = parsed.exercise_id;
     if (!state.history) state.history = [];
-    state.history.push({ exId, name: parsed.exercise_name, weight: parsed.weight_kg, reps: parsed.sets_reps, date: new Date().toISOString() });
+    const dayStr = activeDate.toDateString();
+    const existingIdx = state.history.findIndex(h => h.exId === exId && new Date(h.date).toDateString() === dayStr);
+    const entry = { exId, name: parsed.exercise_name, weight: parsed.weight_kg, reps: parsed.sets_reps, date: activeDate.toISOString() };
+    if (existingIdx >= 0) state.history[existingIdx] = entry;
+    else state.history.push(entry);
+    state.history.sort((a,b) => new Date(a.date) - new Date(b.date));
 
     const prev = getMaxWeight(exId, parsed.weight_kg);
     const isPR = parsed.weight_kg > (prev || 0);
