@@ -109,6 +109,8 @@
   .week-day-dot.done { background: var(--teal); border-color: var(--teal); color: #fff; }
   .week-day-dot.today { border-color: var(--purple); color: var(--purple); font-weight: 700; }
   .week-day-dot.rest { background: var(--gray-light); border-color: transparent; color: var(--text-3); }
+  .week-day-dot.restdone { background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark); }
+  .week-day { cursor: pointer; }
 
   /* Log entries */
   .log-entry { display: flex; flex-direction: column; gap: 4px; }
@@ -222,6 +224,7 @@
       </div>
 
       <div class="week-row" id="week-calendar"></div>
+      <div style="text-align:center; font-size:11px; color:var(--text-3); margin:-6px 0 14px;">Toca un día para ver o editar su registro</div>
 
       <div class="stats-row">
         <div class="stat-card">
@@ -790,19 +793,12 @@ function renderPastDayBar() {
     </div>`;
   } else {
     bar.innerHTML = `<div style="text-align:right; margin-bottom:2px;">
-      <span style="font-size:12px; color:var(--purple); font-weight:500; cursor:pointer;" onclick="showPastDatePicker()">
-        <i class="ti ti-calendar-plus" style="font-size:14px; vertical-align:-2px;"></i> Registrar día anterior
-      </span>
-      <input type="date" id="past-date-input" style="display:none; margin-top:8px; width:100%; box-sizing:border-box; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; font-size:14px; font-family:inherit;" max="${toInputDate(new Date())}" onchange="onPastDateChange(this.value)">
+      <label style="position:relative; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--purple); font-weight:500; cursor:pointer; border:1px solid var(--purple); border-radius:20px; padding:7px 14px; overflow:hidden;">
+        <i class="ti ti-calendar-plus" style="font-size:14px;"></i> Registrar día anterior
+        <input type="date" style="position:absolute; inset:0; opacity:0; width:100%; height:100%; border:none; cursor:pointer; font-size:16px;" max="${toInputDate(new Date())}" onchange="onPastDateChange(this.value)">
+      </label>
     </div>`;
   }
-}
-
-function showPastDatePicker() {
-  const inp = document.getElementById('past-date-input');
-  inp.style.display = 'block';
-  if (inp.showPicker) { try { inp.showPicker(); } catch(e) {} }
-  inp.focus();
 }
 
 function onPastDateChange(val) {
@@ -815,6 +811,14 @@ function onPastDateChange(val) {
 function resetToToday() {
   viewDate = null;
   renderToday();
+}
+
+function goEditDay(y, m, d) {
+  const clicked = new Date(y, m, d); clicked.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (clicked > today) return; // no se editan días futuros
+  viewDate = (clicked.getTime() === today.getTime()) ? null : clicked;
+  showPage('today', document.querySelectorAll('.tab')[0]);
 }
 
 function showPage(name, el) {
@@ -846,11 +850,21 @@ function renderToday() {
 
   const container = document.getElementById('today-session');
   const sess = getTodaySession();
+  const todayKey = getTodayKey();
+  const todayLog = state[todayKey] || {};
 
   if (!sess) {
     document.getElementById('today-subtitle').textContent = `Semana ${week} · Día de descanso — Recuperación activa`;
     const restMsg = viewDate ? 'Ese día quedó marcado como descanso' : 'Hoy es día de descanso';
-    container.innerHTML = `<div class="no-session"><i class="ti ti-leaf" style="color:var(--teal)"></i><p style="font-size:16px; font-weight:500; color:var(--text);">${restMsg}</p><p style="margin-top:8px;">Camina 20-30 min, haz movilidad lumbar o disfruta la recuperación.</p></div>`;
+    const restDone = todayLog._restDone;
+    container.innerHTML = `<div class="no-session">
+      <i class="ti ti-leaf" style="color:var(--teal)"></i>
+      <p style="font-size:16px; font-weight:500; color:var(--text);">${restMsg}</p>
+      <p style="margin-top:8px;">Camina 20-30 min, haz movilidad lumbar o disfruta la recuperación.</p>
+      <button class="btn ${restDone ? 'btn-secondary' : 'btn-teal'} btn-block" style="margin-top:18px;" onclick="toggleRestDone()">
+        <i class="ti ti-${restDone ? 'check' : 'moon'}"></i> ${restDone ? 'Descanso realizado' : 'Marcar descanso como realizado'}
+      </button>
+    </div>`;
     document.getElementById('ai-section').style.display='none';
     return;
   }
@@ -858,9 +872,6 @@ function renderToday() {
   const blockNames = {1:'Adaptación',2:'Hipertrofia',3:'Fuerza'};
   document.getElementById('today-subtitle').textContent = `Semana ${week} · Bloque ${sess.block} ${blockNames[sess.block]}`;
   document.getElementById('ai-section').style.display = 'block';
-
-  const todayKey = getTodayKey();
-  const todayLog = state[todayKey] || {};
 
   let html = `<div class="card">
     <div class="session-header">
@@ -902,6 +913,14 @@ function toggleDone(exId) {
   if (!state[todayKey]) state[todayKey] = {};
   if (!state[todayKey][exId]) state[todayKey][exId] = {};
   state[todayKey][exId].done = !state[todayKey][exId].done;
+  saveState();
+  renderToday();
+}
+
+function toggleRestDone() {
+  const todayKey = getTodayKey();
+  if (!state[todayKey]) state[todayKey] = {};
+  state[todayKey]._restDone = !state[todayKey]._restDone;
   saveState();
   renderToday();
 }
@@ -1055,10 +1074,11 @@ function renderWeek() {
     const isToday = i === dow;
     const done = state[key]?._completed;
     const isRestChoice = state[key]?._sessionTypeIdx === 'rest';
+    const restDone = state[key]?._restDone;
     if (done) sessCount++;
     const dNames = ['','Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-    let dotClass = done ? 'done' : isRestChoice ? 'rest' : isToday ? 'today' : '';
-    return `<div class="week-day"><div class="week-day-name">${dNames[i]}</div><div class="week-day-dot ${dotClass}">${d.getDate()}</div></div>`;
+    let dotClass = done ? 'done' : (isRestChoice && restDone) ? 'restdone' : isRestChoice ? 'rest' : isToday ? 'today' : '';
+    return `<div class="week-day" onclick="goEditDay(${d.getFullYear()}, ${d.getMonth()}, ${d.getDate()})"><div class="week-day-name">${dNames[i]}</div><div class="week-day-dot ${dotClass}">${d.getDate()}</div></div>`;
   }).join('');
   document.getElementById('week-calendar').innerHTML = calHtml;
   document.getElementById('stat-sessions').textContent = sessCount;
